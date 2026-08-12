@@ -1,0 +1,36 @@
+# Helm values for ingress-nginx on a kind cluster.
+#
+# On a real cloud cluster you'd install this with almost no configuration —
+# it would create a cloud LoadBalancer and get a public IP. kind has no cloud,
+# so we bind the controller directly to the node's ports instead.
+
+controller:
+  hostPort:
+    enabled: true
+  # Bind ports 80/443 directly on the NODE, not just inside the pod network.
+  # This is what makes the kind cluster's extraPortMappings work:
+  #   your laptop :8080  →  node :80  →  ingress controller  →  Service  →  pod
+
+  service:
+    type: NodePort
+  # A LoadBalancer Service would sit at <pending> forever on kind — there's no
+  # cloud provider to fulfil it. NodePort is the local equivalent.
+
+  nodeSelector:
+    ingress-ready: "true"
+  # Only schedule onto nodes carrying this label. We put that label on the
+  # control-plane node in kind/cluster.yaml — this is the other half of that.
+
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Equal
+      effect: NoSchedule
+  # Control-plane nodes carry a TAINT that repels normal pods, so your app
+  # workloads never land on the cluster's brain. A TOLERATION is a permission
+  # slip saying "this particular pod is allowed there anyway."
+  #
+  # taint    = the node pushing pods away
+  # toleration = a pod's exemption from that
+  #
+  # We need it because the ingress controller must run on the node whose
+  # ports 80/443 are mapped to your laptop — the control plane.
