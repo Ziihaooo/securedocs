@@ -22,7 +22,7 @@ metadata:
   # `kubectl get deploy -l app=web`. These do NOT control which pods it owns.
 
 spec:
-  replicas: 2
+  replicas: 3
   # How many pods you want. The ReplicaSet enforces this number.
 
   selector:
