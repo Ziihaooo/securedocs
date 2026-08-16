@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api          # which pods this Deployment owns
+  template:             # the blueprint for every pod it creates
+    metadata:
+      labels:
+        app: api        # must match the selector above, or nothing is owned
+    spec:
+      containers:
+        - name: api
+          image: securedocs-api:dev
+          # Default for a non-":latest" tag is IfNotPresent, which uses the
+          # image kind loaded onto the node. Stated explicitly so it doesn't
+          # silently change if the tag ever becomes :latest.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          # Probes: Day 5. Endpoints already exist (/healthz/startup|live|ready).
+          # Resource requests/limits: Day 5.
