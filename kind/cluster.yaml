@@ -1,0 +1,32 @@
+# SecureDocs local cluster
+#
+# Three nodes on purpose: one control plane, two workers. A single-node cluster
+# hides everything interesting — scheduling, anti-affinity, PodDisruptionBudgets
+# and node drains all become no-ops. Two workers is the minimum where those
+# concepts are real.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: securedocs
+
+nodes:
+  - role: control-plane
+    # This label is what the ingress-nginx controller's nodeSelector looks for,
+    # so the controller lands here rather than on a random worker.
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    # Publish the ingress ports to your WSL host so http://localhost:8080 works.
+    # Without this, a kind cluster is unreachable from outside Docker.
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 8443
+        protocol: TCP
+
+  - role: worker
+  - role: worker

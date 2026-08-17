@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SecureDocs.Api</RootNamespace>
+    <AssemblyName>Api</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Npgsql: the PostgreSQL driver for .NET -->
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+    <!-- Adds .AddNpgSql(...) so a real connection test becomes one line -->
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

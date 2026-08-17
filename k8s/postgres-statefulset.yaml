@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  # Points at the headless Service. This is what gives pods their DNS names:
+  #   postgres-0.postgres.default.svc.cluster.local
+  serviceName: postgres
+
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+
+          # Every value comes from the Secret you created with kubectl.
+          # envFrom pulls in ALL keys at once, so POSTGRES_USER, POSTGRES_PASSWORD
+          # and POSTGRES_DB all appear as environment variables.
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+
+          env:
+            # Postgres refuses to initialise into a directory that is not empty,
+            # and a mounted volume often contains a lost+found entry. Pointing
+            # PGDATA at a SUBDIRECTORY of the mount avoids that.
+            # Without this you get: "directory exists but is not empty".
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+
+  # One PVC per pod, created automatically and named <template>-<pod>:
+  #   postgres-0  ->  data-postgres-0
+  # Deleting the StatefulSet does NOT delete these — deliberate, so you cannot
+  # lose a database by deleting a workload.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce   # mountable by one node at a time
+        resources:
+          requests:
+            storage: 1Gi

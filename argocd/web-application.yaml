@@ -1,0 +1,47 @@
+# ArgoCD Application — tells ArgoCD what to watch and where to put it.
+#
+# This file is the ONE thing you still apply by hand. Everything else reaches
+# the cluster through it. (Classic chicken-and-egg: something has to tell
+# ArgoCD what to sync. The "app of apps" pattern solves this later by having
+# one hand-applied Application that points at a folder of other Applications.)
+#
+#   kubectl apply -f argocd/web-application.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: web
+  # Must live in the namespace ArgoCD runs in — it only watches its own.
+  namespace: argocd
+
+spec:
+  # Which ArgoCD "project" this belongs to. `default` allows any repo and any
+  # destination. Real setups define projects to restrict who can deploy where.
+  project: default
+
+  # ── WHERE THE TRUTH LIVES ────────────────────────────────────────────────
+  source:
+    repoURL: https://github.com/Ziihaooo/securedocs.git
+    # HTTPS, not the git@ SSH form — a public repo needs no credentials this
+    # way. If the repo is private, ArgoCD needs a deploy key or token added.
+
+    targetRevision: argocd
+    # The branch to track. Could also be a tag or a commit SHA — pinning to a
+    # SHA is how you get truly immutable deploys.
+
+    path: k8s
+    # Folder inside the repo. Everything in here gets applied, which is why
+    # the helm values file had to move out.
+
+  # ── WHERE IT GOES ────────────────────────────────────────────────────────
+  destination:
+    server: https://kubernetes.default.svc
+    # Magic in-cluster address meaning "the cluster ArgoCD itself runs in".
+    # One ArgoCD can manage many clusters; this says "this one".
+    namespace: default
+
+  # ── HOW IT SYNCS ─────────────────────────────────────────────────────────
+  syncPolicy:
+    automated:
+      prune: true      # git changed: file deleted   -> delete it from the cluster
+      selfHeal: true   # cluster changed by hand     -> put it back to what git says

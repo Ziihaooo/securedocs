@@ -1,0 +1,6 @@
+# Keep build context small and prevent local build output leaking into the image.
+bin/
+obj/
+*.user
+appsettings.Local.json
+.vs/

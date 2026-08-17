@@ -1,0 +1,261 @@
+# SecureDocs — .gitignore
+#
+# This repo is public and handles PII by design, so the secrets section comes
+# first and is deliberately broad. Everything else is grouped by the tool that
+# produces it, including tools from later roadmap phases so the rule exists
+# before the artifact does.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Secrets and credentials — never commit these
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+*.ppk
+
+# cosign signing keys (Phase 3). The public key IS safe to commit — *.key
+# does not match cosign.pub, so it stays tracked.
+cosign.key
+*.private.key
+
+# Cloud credentials
+.aws/
+.azure/
+credentials
+*credentials.json
+*service-account*.json
+gcp-key*.json
+
+# Plaintext / decrypted secret manifests.
+# SOPS- or Sealed-Secrets-encrypted files are SAFE to commit and are re-included
+# below — that is the whole point of committing them.
+secrets.yaml
+secrets.yml
+secrets.*.yaml
+*.dec.yaml
+*.dec.yml
+*.decrypted.*
+*.plain.yaml
+!*sealed*.yaml
+!*sealed*.yml
+!*.sops.yaml
+!*.sops.yml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Kubernetes
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Cluster credentials — a kubeconfig is a credential, not config
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+.kube/
+
+# Exported container images
+*.tar
+*.tar.gz
+
+# Dumps captured while debugging
+*-describe.txt
+*-logs.txt
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Helm
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Vendored subcharts pulled by `helm dependency update`.
+# Chart.lock IS committed — it pins the versions, same role as a lockfile.
+charts/**/charts/
+**/charts/*.tgz
+*.tgz
+
+# Local value overrides that are not part of the delivered config
+values.local.yaml
+values-local.yaml
+*.local.values.yaml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Terraform (Phase 2 — EKS/AKS)
+# ─────────────────────────────────────────────────────────────────────────────
+
+.terraform/
+.terraform.lock.hcl.bak
+
+# State: contains every resource attribute in plaintext, including passwords
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.tfstate.lock.info
+
+# Plan files embed resolved values the same way state does.
+# (AceArena has l0/tfplan and l1/tfplan committed — do not repeat that here.)
+tfplan
+*.tfplan
+plan.out
+
+crash.log
+crash.*.log
+
+# tfvars may carry secrets; commit an example instead
+*.tfvars
+*.tfvars.json
+!example.tfvars
+!*.example.tfvars
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# The provider lock file SHOULD be committed so the team pins identical versions
+!.terraform.lock.hcl
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. .NET 9 (web / api / worker / migrator)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+.vs/
+*.user
+*.suo
+*.userprefs
+*.rsuser
+TestResults/
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+*.nupkg
+*.snupkg
+project.lock.json
+msbuild.log
+msbuild.err
+*.binlog
+
+# Local-only app config. appsettings.json and appsettings.Development.json are
+# committed by convention — keep real values out of them and use User Secrets
+# or External Secrets Operator instead.
+appsettings.Local.json
+appsettings.*.local.json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Node / Tailwind (Blazor front end)
+# ─────────────────────────────────────────────────────────────────────────────
+
+node_modules/
+dist/
+.npm
+.yarn/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. Security tooling output (Phases 3–4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Scan reports are regenerated every run and go stale immediately
+trivy-results.*
+trivy-report.*
+*.sarif
+gitleaks-report.*
+semgrep-results.*
+checkov-report.*
+kube-bench-*.json
+
+# SBOMs — publish these as release artifacts / attestations, not repo files
+sbom.json
+sbom-*.json
+*.spdx.json
+*.cdx.json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. Tooling, editors, OS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Claude Code. settings.json currently holds machine-specific WSL paths, so the
+# whole directory is ignored. If you later want to share project permissions
+# with a collaborator, delete the first line and keep the .local.json rule —
+# settings.local.json is personal and must always stay ignored.
+.claude/
+.claude/settings.local.json
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Personal notes — this repo is public and shown to employers
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# These are written *to me*, not to a reader of the repo. They contain career
+# planning, target employers, and a skills audit that says "Kubernetes:
+# Beginner" — the opposite of what a portfolio repo should say.
+#
+# README.md stays tracked: it is the public front door.
+#
+# When something here becomes genuinely public-worthy (an architecture doc, an
+# ADR, a runbook, a postmortem), rewrite it for an outside reader and commit it
+# under docs/ as a new file rather than un-ignoring one of these.
+
+ROADMAP.md
+LEARNING.md
+PROJECT-DESIGN.md
+docs/k8s-notes.md
+docs/setup-log.md
+
+# Local convenience scripts. They hardcode my machine's PATH ($HOME/.dotnet,
+# $HOME/.local/bin) and exist to rebuild *my* laptop environment, not to be
+# run by anyone else.
+scripts/
+
+# Convention for anything personal added later — keeps this list from growing
+private/
+notes/
+*.private.md
+*.local.md
+*-notes.md
+*-log.md
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Scratch
+# ─────────────────────────────────────────────────────────────────────────────
+
+tmp/
+temp/
+scratch/
+.cache/
+*.log
+*.bak
+*.orig
+*.rej
