@@ -61,6 +61,56 @@ spec:
 
           ports:
             - containerPort: 80
+              name: http
           # DOCUMENTATION ONLY. This does not open, publish or firewall anything.
           # The container listens on 80 whether you write this or not.
           # It exists so humans and tooling know what the container expects.
+          #
+          # The "name" is the exception — naming it lets the probes below say
+          # port: http instead of port: 80. Change the port number in one place
+          # and the probes follow.
+
+          # ── RESOURCES ────────────────────────────────────────────────────
+          # nginx serving static files is tiny. These are deliberately small so
+          # three replicas cost almost nothing on a laptop.
+          # requests < limits -> Burstable. Fine: web is stateless and losing a
+          # pod costs nothing, so it's a reasonable eviction candidate.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
+          # ── PROBES ───────────────────────────────────────────────────────
+          # nginx starts in well under a second, so the startup budget is short.
+          # Compare postgres at 120s — the budget should match how long the thing
+          # actually takes to boot, not be copied between services.
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 2
+            failureThreshold: 5      # 10s to start
+
+          # Static file serving has no dependencies, so "can it answer HTTP?" is
+          # a genuinely complete liveness check here. That is unusual — for the
+          # api it would not be.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          # Identical to liveness in this case, because web depends on nothing.
+          # For the api they differ, since readiness also checks Postgres.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
