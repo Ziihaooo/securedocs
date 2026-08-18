@@ -74,5 +74,43 @@ spec:
             # "postgres" is the headless Service name; DNS resolves it in-cluster.
             - name: ConnectionStrings__Default
               value: Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)
+
+          # ── STARTUP: "have you finished booting?" ─────────────────────────
+          # While this is failing, the other two probes are SUSPENDED. That is
+          # the whole point: a slow .NET cold start can't be mistaken for a hang.
+          # Budget = periodSeconds x failureThreshold = 2 x 30 = 60s to start.
+          # Exceed that and the container is killed and retried.
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+
+          # ── LIVENESS: "are you wedged? restart me" ────────────────────────
+          # No initialDelaySeconds needed — startupProbe already gates this.
+          # 3 failures x 10s = ~30s of being unresponsive before a restart.
+          # Too aggressive here and you restart pods that were merely busy.
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          # ── READINESS: "can you serve traffic right now?" ─────────────────
+          # Checks Postgres. Failing removes the pod from the Service endpoints
+          # WITHOUT restarting it. Tighter thresholds than liveness because the
+          # consequence is mild and reversible — we want traffic pulled quickly.
+          # successThreshold: 1 means it rejoins as soon as one check passes.
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+            successThreshold: 1
           # Probes: Day 5. Endpoints already exist (/healthz/startup|live|ready).
           # Resource requests/limits: Day 5.
