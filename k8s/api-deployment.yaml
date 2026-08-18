@@ -75,6 +75,29 @@ spec:
             - name: ConnectionStrings__Default
               value: Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)
 
+          # ── RESOURCES ────────────────────────────────────────────────────
+          # requests = what the SCHEDULER reserves. It only places this pod on a
+          #            node with this much free. Sum of requests, not usage,
+          #            decides whether a node is "full".
+          # limits   = the hard ceiling enforced by the kernel at runtime.
+          #
+          #   over CPU limit    -> throttled. Slow, still alive.
+          #   over memory limit -> OOMKilled. Killed instantly, no warning.
+          #
+          # CPU is compressible (you can have less). Memory is not — there is no
+          # "slightly less RAM", so the kernel kills the process instead.
+          #
+          # requests < limits here = QoS class "Burstable": can use spare node
+          # capacity when it's free, but is evicted before Guaranteed pods when
+          # the node runs short.
+          resources:
+            requests:
+              cpu: 50m        # 0.05 of a core — enough to idle and serve health checks
+              memory: 128Mi   # .NET needs real memory even when idle
+            limits:
+              cpu: 500m       # burst to half a core under load
+              memory: 256Mi   # exceeding this = OOMKilled (Day 7 demo)
+
           # ── STARTUP: "have you finished booting?" ─────────────────────────
           # While this is failing, the other two probes are SUSPENDED. That is
           # the whole point: a slow .NET cold start can't be mistaken for a hang.
