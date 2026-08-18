@@ -29,9 +29,17 @@ spec:
     # The branch to track. Could also be a tag or a commit SHA — pinning to a
     # SHA is how you get truly immutable deploys.
 
-    path: k8s
-    # Folder inside the repo. Everything in here gets applied, which is why
-    # the helm values file had to move out.
+    path: charts/securedocs
+    # Now a Helm chart rather than a folder of plain manifests. ArgoCD detects
+    # the Chart.yaml and renders the templates itself — it does not run
+    # `helm install`, so there is no Helm release and `helm list` shows nothing.
+    # ArgoCD renders, then applies the output like any other manifests.
+
+    helm:
+      valueFiles:
+        - values-dev.yaml
+      # Paths are relative to `path` above. Swapping this one line to
+      # values-prod.yaml is the entire difference between environments.
 
   # ── WHERE IT GOES ────────────────────────────────────────────────────────
   destination:

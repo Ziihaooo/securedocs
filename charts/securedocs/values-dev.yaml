@@ -1,0 +1,14 @@
+# Dev overrides — kind cluster on a laptop.
+# Only what differs from values.yaml; everything else is inherited.
+
+web:
+  replicas: 1        # 3 is pointless on a single laptop
+
+api:
+  replicas: 1
+
+postgres:
+  storage: 1Gi
+
+ingress:
+  className: nginx
