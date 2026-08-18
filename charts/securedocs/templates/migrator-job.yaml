@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrator
+  annotations:
+    # Run to completion BEFORE ArgoCD applies anything else in this chart.
+    argocd.argoproj.io/hook: PreSync
+    # A Job's spec is immutable, so the previous one must be removed before a
+    # changed version can be created.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrator
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+
+          envFrom:
+            - secretRef:
+                name: {{ .Values.postgres.existingSecret }}
+
+          env:
+            # psql reads PGPASSWORD from the environment, so the password never
+            # appears on a command line where `ps` would show it.
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: POSTGRES_PASSWORD
+
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until pg_isready -h postgres -U "$POSTGRES_USER"; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+              echo "applying schema"
+
+              # Runs on every sync, so every statement must be idempotent.
+              psql -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 <<'SQL'
+              CREATE TABLE IF NOT EXISTS documents (
+                  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  filename    text        NOT NULL,
+                  size_bytes  bigint      NOT NULL,
+                  uploaded_at timestamptz NOT NULL DEFAULT now(),
+                  scanned     boolean     NOT NULL DEFAULT false
+              );
+
+              CREATE TABLE IF NOT EXISTS audit_log (
+                  id          bigserial PRIMARY KEY,
+                  occurred_at timestamptz NOT NULL DEFAULT now(),
+                  actor       text        NOT NULL,
+                  action      text        NOT NULL,
+                  document_id uuid        REFERENCES documents(id)
+              );
+
+              CREATE INDEX IF NOT EXISTS idx_audit_log_occurred_at
+                  ON audit_log (occurred_at DESC);
+              SQL
+
+              echo "schema applied"

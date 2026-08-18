@@ -1,0 +1,62 @@
+# Default values. Equivalent to defaults in variables.tf.
+#
+# Anything here can be overridden per environment:
+#   helm install securedocs . -f values-dev.yaml
+#
+# Helm MERGES the override on top of these — an override file only needs the
+# keys that differ, not a full copy. (Unlike tfvars, where every required
+# variable must be supplied.)
+
+# ── web: nginx serving the landing page ─────────────────────────────────────
+web:
+  replicas: 3
+  image:
+    repository: nginx
+    tag: "1.27"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# ── api: the .NET application ───────────────────────────────────────────────
+api:
+  replicas: 2
+  image:
+    repository: securedocs-api
+    tag: dev
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  # Startup budget = periodSeconds x failureThreshold.
+  # Exposed as a value because a cold start on EKS is slower than on kind.
+  startupProbe:
+    periodSeconds: 2
+    failureThreshold: 30
+
+# ── postgres ────────────────────────────────────────────────────────────────
+postgres:
+  image:
+    repository: postgres
+    tag: 16-alpine
+  storage: 1Gi
+  # requests == limits -> Guaranteed QoS. Set both from one value so they can
+  # never accidentally drift apart and silently downgrade to Burstable.
+  resources:
+    cpu: 100m
+    memory: 256Mi
+  # The Secret is created out-of-band with kubectl and is NOT in git.
+  # The chart only references it by name.
+  existingSecret: postgres-credentials
+
+# ── shared ──────────────────────────────────────────────────────────────────
+ingress:
+  className: nginx

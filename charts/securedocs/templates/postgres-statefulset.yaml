@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+
+          ports:
+            - containerPort: 5432
+              name: postgres
+
+          envFrom:
+            - secretRef:
+                name: {{ .Values.postgres.existingSecret }}
+
+          env:
+            # A mounted volume often contains lost+found, and Postgres refuses
+            # to initialise into a non-empty directory. Point PGDATA at a
+            # subdirectory of the mount to avoid it.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          # requests and limits both come from ONE value, so they can never
+          # drift apart. That keeps QoS class Guaranteed structurally, rather
+          # than relying on someone noticing a comment.
+          resources:
+            requests:
+              cpu: {{ .Values.postgres.resources.cpu }}
+              memory: {{ .Values.postgres.resources.memory }}
+            limits:
+              cpu: {{ .Values.postgres.resources.cpu }}
+              memory: {{ .Values.postgres.resources.memory }}
+
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "securedocs", "-d", "securedocs"]
+            periodSeconds: 5
+            failureThreshold: 24      # 120s — initdb and WAL replay are slow
+
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "securedocs", "-d", "securedocs"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6       # 60s — restarting a database is expensive
+
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "securedocs", "-d", "securedocs"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}

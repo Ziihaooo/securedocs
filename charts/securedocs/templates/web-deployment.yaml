@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  # The double-brace form below is a placeholder, rendered by Helm before
+  # anything reaches the cluster. .Values reads values.yaml and any -f override.
+  #
+  # NOTE: Helm templates the raw TEXT before YAML is parsed, so a placeholder
+  # written inside a # comment is still evaluated. An empty one breaks the
+  # chart with "missing value for command". Never write a bare example of the
+  # syntax in a comment.
+  replicas: {{ .Values.web.replicas }}
+
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: {{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+
+          ports:
+            - containerPort: 80
+              name: http
+
+          # toYaml turns a whole values BLOCK into YAML, rather than one scalar.
+          # nindent 12 re-indents it to 12 spaces and adds a leading newline.
+          #
+          # Indentation is the hard part of Helm templating: the values file has
+          # its own indentation, and the output has to match its position here.
+          # Get nindent wrong and you produce syntactically invalid YAML.
+          #
+          # The leading dash inside the opening braces trims the preceding
+          # whitespace and newline, so the block starts cleanly.
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 2
+            failureThreshold: 5
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2

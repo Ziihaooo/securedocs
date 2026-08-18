@@ -1,0 +1,17 @@
+# Chart metadata. Helm reads this to know what the package IS.
+apiVersion: v2          # v2 = Helm 3. v1 was Helm 2 and is long dead.
+
+name: securedocs
+description: SecureDocs platform — web, api, postgres
+
+type: application       # "application" = deployable.
+                        # "library" = shared template helpers only, not installable.
+
+# TWO different versions, and they mean different things:
+
+version: 0.1.0          # the CHART's version — bump when you change templates
+                        # or values structure. Follows semver.
+
+appVersion: "0.1.0"     # the APP's version — what's actually running.
+                        # Quoted because "1.0" would otherwise parse as a number.
+                        # Shown in `helm list` as APP VERSION.

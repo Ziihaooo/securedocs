@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+spec:
+  # Parameterised: "nginx" on kind, but "alb" on EKS once the AWS Load Balancer
+  # Controller is installed. One value, two environments.
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          # Catch-all. The /api rule is more specific, so nginx matches that first.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80

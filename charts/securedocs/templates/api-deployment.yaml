@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          # Reuses the postgres image purely for pg_isready — no extra image to
+          # pull, since the node already has it.
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER"; do
+                echo "postgres not ready, retrying in 2s"
+                sleep 2
+              done
+              echo "postgres is ready"
+          envFrom:
+            - secretRef:
+                name: {{ .Values.postgres.existingSecret }}
+
+      containers:
+        - name: api
+          image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+
+          ports:
+            - containerPort: 8080
+              name: http
+
+          env:
+            # Declared individually, not envFrom, because the $(VAR) expansion
+            # in ConnectionStrings__Default below only sees variables declared
+            # here — and only ones declared ABOVE the line using them.
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: POSTGRES_DB
+
+            # Double underscore is .NET's nested-config separator, so this
+            # becomes ConnectionStrings:Default.
+            - name: ConnectionStrings__Default
+              value: Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)
+
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+
+          # Startup budget is a value because a .NET cold start on EKS is
+          # slower than on a laptop — 60s here, likely more in the cloud.
+          startupProbe:
+            httpGet:
+              path: /healthz/startup
+              port: http
+            periodSeconds: {{ .Values.api.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.api.startupProbe.failureThreshold }}
+
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+            successThreshold: 1
