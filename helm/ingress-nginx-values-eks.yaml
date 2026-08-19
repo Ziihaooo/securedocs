@@ -1,0 +1,72 @@
+# ingress-nginx on EKS.
+#
+# Completely different from helm/ingress-nginx-values.yaml (the kind version),
+# because the two clusters expose traffic in opposite ways:
+#
+#   kind  no cloud load balancer exists, so the controller binds the NODE's
+#         ports 80/443 directly and kind maps them to your laptop
+#   EKS   a real cloud load balancer sits in front, so the controller just
+#         asks for a Service of type LoadBalancer
+#
+# Same chart, same Ingress manifests, different plumbing underneath.
+
+controller:
+  service:
+    type: LoadBalancer
+
+    annotations:
+      # NLB, not ALB. ingress-nginx is already an L7 router — putting an ALB
+      # in front would mean two layers doing the same job. An NLB is layer 4:
+      # it forwards TCP and lets nginx do the HTTP routing.
+      # Also cheaper per hour and much faster to provision.
+      service.beta.kubernetes.io/aws-load-balancer-type: "external"
+
+      # "ip" targets the nginx PODS directly, using their real VPC addresses.
+      # The alternative ("instance") targets NodePorts and adds a hop through
+      # kube-proxy. IP mode also preserves the client's source address, which
+      # matters for the audit log.
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+
+      # Public. An internal NLB would only be reachable from inside the VPC.
+      service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+
+      # Health check the controller's own health endpoint rather than a random
+      # app path, so the NLB knows whether NGINX itself is serving.
+      service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/healthz"
+      service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "10254"
+
+  # Two replicas: the NLB stops routing to one while it restarts, and a single
+  # replica would mean every controller upgrade is an outage.
+  replicaCount: 2
+
+  # Deliberately NOT set (unlike the kind values file):
+  #   hostPort            — no need, the NLB reaches pods directly
+  #   nodeSelector        — no ingress-ready label on EKS nodes
+  #   tolerations         — EKS worker nodes carry no taint
+  # Those three exist on kind only because there is no cloud load balancer.
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  config:
+    # DELIBERATELY FALSE.
+    #
+    # An NLB is layer 4 — it forwards TCP and never parses HTTP, so it does NOT
+    # add an X-Forwarded-For header. Nothing trustworthy is writing one.
+    #
+    # Setting this true would make nginx believe whatever the CLIENT sent,
+    # letting anyone forge their source IP: fake audit-log entries, bypassed
+    # rate limits, bypassed IP allowlists.
+    #
+    # False means nginx uses the TCP source address instead — an observed fact
+    # rather than a claim. NLB preserves the real client IP down to the pod, so
+    # nothing is lost.
+    #
+    # Flip this to "true" only if an ALB or CloudFront is ever put in front,
+    # because those DO set the header and are proxies we control.
+    use-forwarded-headers: "false"

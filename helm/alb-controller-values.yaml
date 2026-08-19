@@ -1,0 +1,28 @@
+# Helm values for the AWS Load Balancer Controller.
+#
+# Installed by hand, like ingress-nginx and ArgoCD — it is cluster
+# infrastructure, not application workload.
+
+clusterName: securedocs-dev
+
+# The controller needs these to tag and look up resources. It can discover them
+# from the instance metadata, but being explicit means it fails loudly with a
+# clear message rather than silently misbehaving.
+region: ap-southeast-2
+vpcId: vpc-06d412e240a23917c
+
+serviceAccount:
+  create: true
+  # MUST match the sub condition in the IAM role's trust policy:
+  #   system:serviceaccount:kube-system:aws-load-balancer-controller
+  # Change either side and the pod gets AccessDenied at runtime.
+  name: aws-load-balancer-controller
+  # The eks.amazonaws.com/role-arn annotation is NOT here. It is injected by
+  # Terraform via a `set` block in infra/l1/alb-controller.tf, because the role
+  # ARN only exists after apply. Hardcoding it here as well would give two
+  # sources of truth for one value — and they would eventually disagree.
+
+# Two replicas so the controller survives a node going away. It is not in the
+# request path — an ALB keeps serving if the controller dies — but while it is
+# down, no Ingress changes take effect.
+replicaCount: 2
