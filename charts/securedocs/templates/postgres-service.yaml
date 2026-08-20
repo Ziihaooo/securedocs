@@ -4,6 +4,9 @@ metadata:
   name: postgres
   labels:
     app: postgres
+  annotations:
+    # Wave -1: postgres must be up before the migrator (wave 0) can reach it.
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   # Headless — no virtual IP. Gives each StatefulSet pod a stable DNS name:
   #   postgres-0.postgres.default.svc.cluster.local

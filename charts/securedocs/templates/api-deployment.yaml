@@ -4,6 +4,10 @@ metadata:
   name: api
   labels:
     app: api
+  annotations:
+    # Wave 1: last. The schema must exist before the api starts, or its
+    # readiness probe fails against tables that are not there yet.
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: {{ .Values.api.replicas }}
   selector:

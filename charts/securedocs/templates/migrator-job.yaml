@@ -3,8 +3,24 @@ kind: Job
 metadata:
   name: migrator
   annotations:
-    # Run to completion BEFORE ArgoCD applies anything else in this chart.
-    argocd.argoproj.io/hook: PreSync
+    # Sync, NOT PreSync.
+    #
+    # PreSync runs before ANY resource in the chart exists. That is correct
+    # when the database is external (RDS) - the usual case, and why this is
+    # the default advice. With postgres inside the cluster it deadlocks on a
+    # fresh build:
+    #
+    #   migrator (PreSync)  waits for  postgres + postgres-credentials
+    #   both of those       are in     the main sync
+    #   the main sync       waits for  migrator
+    #
+    # A Sync hook runs INSIDE the main phase, ordered by sync-wave alongside
+    # everything else - so it can be placed after the things it needs.
+    argocd.argoproj.io/hook: Sync
+
+    # Wave 0: after the Secret (-2) and postgres (-1), before the api (1).
+    # ArgoCD finishes each wave and waits for it to be healthy before the next.
+    argocd.argoproj.io/sync-wave: "0"
     # A Job's spec is immutable, so the previous one must be removed before a
     # changed version can be created.
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation

@@ -2,6 +2,11 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
+  annotations:
+    # Wave -1: after the Secret it mounts (-2), before the migrator (0).
+    # ArgoCD waits for this wave to report healthy - for a StatefulSet that
+    # means the pod is Ready - so the migrator never races the database.
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   serviceName: postgres
   replicas: 1
