@@ -1,7 +1,8 @@
 # Default values. Equivalent to defaults in variables.tf.
 #
 # Anything here can be overridden per environment:
-#   helm install securedocs . -f values-dev.yaml
+#   helm install securedocs . -f values-kind.yaml   (local kind cluster)
+#   helm install securedocs . -f values-eks.yaml    (AWS EKS cluster)
 #
 # Helm MERGES the override on top of these — an override file only needs the
 # keys that differ, not a full copy. (Unlike tfvars, where every required
@@ -48,6 +49,13 @@ postgres:
     repository: postgres
     tag: 16-alpine
   storage: 1Gi
+  # Which StorageClass the PVC asks for. Differs per cluster:
+  #   kind  "standard"  (rancher local-path, installed by kind)
+  #   EKS   "gp3"       (created in infra/l1/ebs-csi.tf)
+  # Empty means "use the cluster default" — set it per environment instead,
+  # so which disk you got is readable from the chart rather than from cluster
+  # state. Same pattern as ingress.className.
+  storageClass: ""
   # requests == limits -> Guaranteed QoS. Set both from one value so they can
   # never accidentally drift apart and silently downgrade to Burstable.
   resources:

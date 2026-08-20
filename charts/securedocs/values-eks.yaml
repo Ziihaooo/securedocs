@@ -1,0 +1,50 @@
+# EKS (dev cluster) overrides.
+#
+# Only what differs from values.yaml. Compare its length to the chart: that
+# gap is the whole point of Day 6.
+#
+# NOTE what is NOT here:
+#   ingress.className   still "nginx" — the reason we chose ingress-nginx over
+#                       the ALB controller, so the same manifests run on AKS
+#   probes, QoS, the migrator Job, the initContainer — all unchanged
+
+web:
+  replicas: 2          # real nodes now, not one laptop
+
+api:
+  replicas: 2
+
+  image:
+    # The node pulls from ECR using the node role's
+    # AmazonEC2ContainerRegistryReadOnly permission. No imagePullSecret needed.
+    #
+    # `kind load docker-image` does not exist here — the image must genuinely
+    # be pushed to a registry the cluster can reach.
+    repository: 920042984462.dkr.ecr.ap-southeast-2.amazonaws.com/securedocs-api
+
+    # A REAL version, not "dev". The ECR repo is set to IMMUTABLE tags, so a
+    # tag can never be overwritten — v0.1.0 always means the same bytes.
+    # That is also what cosign signs in Week 3.
+    tag: v0.1.0
+
+    # Default for a non-":latest" tag, stated explicitly so it cannot change
+    # meaning if the tag ever becomes ":latest".
+    pullPolicy: IfNotPresent
+
+  # EKS cold start is slower than kind: bigger network hop, cold page cache.
+  # 2s x 45 = 90s budget instead of 60.
+  startupProbe:
+    periodSeconds: 2
+    failureThreshold: 45
+
+postgres:
+  # Created in infra/l1/ebs-csi.tf. gp3: 3000 IOPS at any size, ~20% cheaper
+  # per GB than the gp2 EKS ships as default.
+  storageClass: gp3
+
+  # EBS bills per provisioned GB whether used or not, so this is a real cost
+  # decision — unlike kind, where the volume was a folder on disk.
+  storage: 5Gi
+
+ingress:
+  className: nginx

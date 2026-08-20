@@ -127,9 +127,14 @@ resource "helm_release" "alb_controller" {
     value = aws_iam_role.alb_controller.arn
   }
 
-  # Without nodes the pods stay Pending and the release never becomes ready.
   depends_on = [
+    # Without nodes the pods stay Pending and the release never becomes ready.
     aws_eks_node_group.default,
     aws_iam_role_policy_attachment.alb_controller,
+
+    # Destroy ordering: this controller must still have internet egress while
+    # it cleans up the AWS resources it created. See the longer note in
+    # ingress-nginx.tf.
+    aws_route.private_nat,
   ]
 }

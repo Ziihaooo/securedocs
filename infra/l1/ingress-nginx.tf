@@ -36,6 +36,21 @@ resource "helm_release" "ingress_nginx" {
   depends_on = [
     helm_release.alb_controller,
     aws_eks_node_group.default,
+
+    # ⚠ DESTROY ORDERING, not create ordering.
+    #
+    # Terraform destroys dependents FIRST, so declaring a dependency on the NAT
+    # route guarantees this release is torn down while egress still exists.
+    #
+    # Without it, Terraform removes the NAT in parallel with this release. The
+    # ALB controller then loses internet access, cannot call the AWS API to
+    # delete the NLB, and never removes the `service.k8s.aws/resources`
+    # finalizer from the Service. The Service can't be deleted, the Helm
+    # release hangs forever, and you are left manually deleting the NLB and
+    # patching out the finalizer.
+    #
+    # Cost us 15 minutes of "Still destroying..." before anyone looked.
+    aws_route.private_nat,
   ]
 }
 

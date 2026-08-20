@@ -73,6 +73,16 @@ spec:
       spec:
         accessModes:
           - ReadWriteOnce
+
+        # Wrapped in an `if` because empty and absent mean DIFFERENT things:
+        #   absent            use the cluster's default StorageClass
+        #   storageClassName: ""   explicitly NO class — disables dynamic
+        #                          provisioning, and the PVC never binds
+        # Rendering an empty value would silently break provisioning.
+        {{- if .Values.postgres.storageClass }}
+        storageClassName: {{ .Values.postgres.storageClass }}
+        {{- end }}
+
         resources:
           requests:
             storage: {{ .Values.postgres.storage }}

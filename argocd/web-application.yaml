@@ -37,9 +37,11 @@ spec:
 
     helm:
       valueFiles:
-        - values-dev.yaml
+        # This Application runs on the KIND cluster, so it uses the kind values.
+        # The EKS cluster gets its own Application pointing at values-eks.yaml.
+        - values-kind.yaml
       # Paths are relative to `path` above. Swapping this one line to
-      # values-prod.yaml is the entire difference between environments.
+      # values-eks.yaml is the entire difference between environments.
 
   # ── WHERE IT GOES ────────────────────────────────────────────────────────
   destination:

@@ -9,6 +9,9 @@ api:
 
 postgres:
   storage: 1Gi
+  # kind installs rancher local-path as "standard". Named explicitly for the
+  # same reason as EKS: which disk you got should be readable from the chart.
+  storageClass: standard
 
 ingress:
   className: nginx
