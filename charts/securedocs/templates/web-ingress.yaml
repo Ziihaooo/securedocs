@@ -2,12 +2,42 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: web
+{{- if .Values.certManager.enabled }}
+  annotations:
+    # The whole of cert-manager's involvement is this one line.
+    #
+    # cert-manager watches every Ingress. Seeing this annotation, it reads the
+    # hosts in spec.tls, creates a Certificate object for them, runs the
+    # HTTP-01 challenge, and writes the result into spec.tls[].secretName.
+    # Nothing else in this file knows cert-manager exists.
+    cert-manager.io/cluster-issuer: {{ .Values.certManager.issuer }}
+{{- end }}
 spec:
   # Parameterised: "nginx" on kind, but "alb" on EKS once the AWS Load Balancer
   # Controller is installed. One value, two environments.
   ingressClassName: {{ .Values.ingress.className }}
+{{- if and .Values.certManager.enabled .Values.ingress.host }}
+  tls:
+    # "Serve HTTPS for this host, using the cert in this Secret."
+    #
+    # The Secret does not exist yet. Declaring it is what MAKES cert-manager
+    # create it — the same direction of causation as a PVC naming a volume
+    # that the CSI driver then provisions.
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: web-tls
+{{- end }}
   rules:
-    - http:
+{{- if .Values.ingress.host }}
+    # With a host set, this rule only matches requests whose Host header is
+    # this name. Required for TLS: the cert is issued FOR a name, so the
+    # routing has to key on that same name.
+    - host: {{ .Values.ingress.host }}
+{{- else }}
+    # No host: match anything. Fine behind a port-forward, useless for TLS.
+    -
+{{- end }}
+      http:
         paths:
           # Catch-all. The /api rule is more specific, so nginx matches that first.
           - path: /

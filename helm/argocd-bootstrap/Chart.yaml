@@ -1,0 +1,17 @@
+# ---------------------------------------------------------------------------
+# A local chart holding exactly one object: the ArgoCD Application that points
+# at charts/securedocs.
+#
+# Why it is not in helm/argocd-values.yaml any more:
+#   Helm validates EVERY object in a release before creating ANY of them. An
+#   Application shipped inside the argo-cd release is checked while
+#   argoproj.io/v1alpha1 does not exist yet, so install fails with
+#   "no matches for kind Application". Not a race — it fails every time.
+#
+# A separate release, applied after the first one finishes, sees the CRDs.
+# ---------------------------------------------------------------------------
+apiVersion: v2
+name: argocd-bootstrap
+description: The root ArgoCD Application for securedocs
+type: application
+version: 0.1.0

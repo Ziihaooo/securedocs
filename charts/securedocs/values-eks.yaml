@@ -53,5 +53,35 @@ externalSecrets:
   enabled: true
   secretName: securedocs/dev/postgres
 
+# cert-manager is installed on this cluster (infra/l1/cert-manager.tf), and the
+# NLB gives it a public address Let's Encrypt can actually reach.
+certManager:
+  enabled: true
+
+  # Left empty on purpose — the template omits the field entirely when unset.
+  # ACME registers an account fine without a contact, and Let's Encrypt stopped
+  # sending expiry reminders in 2025, so filling this in would achieve little
+  # beyond publishing an address in a public repo.
+  #
+  # Set it if you ever want CA notices — a throwaway address, not your main one.
+  email: ""
+
+  # Start on staging: prove the whole chain works (DNS -> HTTP-01 challenge ->
+  # cert in a Secret -> nginx serving it) while a mistake costs nothing.
+  # Flip to letsencrypt-prod once the browser warning is the ONLY thing wrong.
+  issuer: letsencrypt-staging
+
 ingress:
   className: nginx
+
+  # The public hostname. Changes on every rebuild, because a destroyed NLB
+  # comes back with new IPs:
+  #
+  #   terraform output nlb_hostname     -> k8s-....elb.amazonaws.com
+  #   dig +short <that>                 -> 13.211.44.8
+  #   host = 13.211.44.8.sslip.io
+  #
+  # sslip.io resolves any IP embedded in a name straight back to that IP, so
+  # there is no DNS record to create anywhere. The cost is this line moving
+  # each rebuild — which an Elastic IP would fix for ~$7/month.
+  host: 3.25.10.250.sslip.io

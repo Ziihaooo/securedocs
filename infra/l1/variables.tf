@@ -75,3 +75,18 @@ variable "node_max_size" {
   type    = number
   default = 3
 }
+
+# ── git source for ArgoCD ───────────────────────────────────────────────────
+# Which repository and branch the cluster follows. ArgoCD pulls from here; no
+# credentials needed while the repo is public.
+variable "repo_url" {
+  description = "Git repository ArgoCD syncs from"
+  type        = string
+  default     = "https://github.com/Ziihaooo/securedocs.git"
+}
+
+variable "repo_revision" {
+  description = "Branch or tag ArgoCD tracks"
+  type        = string
+  default     = "argocd"
+}

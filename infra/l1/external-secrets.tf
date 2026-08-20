@@ -95,6 +95,12 @@ resource "helm_release" "external_secrets" {
   depends_on = [
     aws_eks_node_group.default,
     aws_iam_role_policy_attachment.external_secrets,
+
+    # See the note in cert-manager.tf: the ALB controller's mutating webhook
+    # intercepts every Service creation cluster-wide, so nothing that creates
+    # a Service may run before that controller is ready.
+    helm_release.alb_controller,
+
     aws_route.private_nat,
   ]
 }

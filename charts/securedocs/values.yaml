@@ -76,6 +76,24 @@ externalSecrets:
   # The name of the secret in AWS Secrets Manager (not the Kubernetes Secret).
   secretName: securedocs/dev/postgres
 
+# ── cert-manager ────────────────────────────────────────────────────────────
+# Off by default. kind has no public IP, so Let's Encrypt can never reach it to
+# validate — the site stays HTTP there. EKS turns this on.
+certManager:
+  enabled: false
+  # Expiry warnings go here. Required when enabled.
+  email: ""
+  # Which ClusterIssuer the Ingress asks for.
+  #   letsencrypt-staging  untrusted cert, loose rate limits — use while testing
+  #   letsencrypt-prod     real cert, 5 per week per hostname
+  issuer: letsencrypt-staging
+
 # ── shared ──────────────────────────────────────────────────────────────────
 ingress:
   className: nginx
+  # Empty means the Ingress matches ANY hostname — how it has worked so far,
+  # fine when you reach it through a port-forward or /etc/hosts.
+  #
+  # TLS needs a real one: a certificate is issued FOR a name, and the browser
+  # checks the name it typed against the name in the cert.
+  host: ""

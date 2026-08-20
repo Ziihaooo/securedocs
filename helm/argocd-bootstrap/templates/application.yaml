@@ -1,0 +1,31 @@
+# The single object ArgoCD needs to take over. Everything else the cluster
+# runs is decided by git from here on.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: securedocs
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: charts/securedocs
+    helm:
+      valueFiles:
+        # The ONLY difference from the kind Application. Same repo, same
+        # chart, same templates - one line of values.
+        - {{ .Values.valuesFile }}
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true      # removed from git -> removed from the cluster
+      selfHeal: true   # changed by hand -> reverted
+    syncOptions:
+      # The cluster is rebuilt nightly, so the namespace may not exist yet.
+      - CreateNamespace=true

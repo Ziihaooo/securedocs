@@ -69,49 +69,19 @@ applicationSet:
   enabled: false
 
 # ---------------------------------------------------------------------------
-# The Application, shipped as part of this release.
+# The Application used to live here, under extraObjects. It does not any more.
 #
-# WHY HERE rather than a separate Terraform resource:
+# Helm builds and validates EVERY object in a release before creating ANY of
+# them. On a fresh cluster the argoproj.io/v1alpha1 CRDs do not exist at that
+# moment, so the release failed with:
 #
-#   kubernetes_manifest validates against the API server at PLAN time, and the
-#   Application CRD does not exist until ArgoCD is installed during APPLY. On a
-#   fresh cluster the plan fails with:
-#       no matches for kind "Application" in group "argoproj.io"
-#   People work around that with two-stage `-target` applies. Rendering it as
-#   part of the same Helm release avoids the problem entirely — the CRD exists
-#   by the time this object is created.
+#   no matches for kind "Application" in version "argoproj.io/v1alpha1"
+#   ensure CRDs are installed first
 #
-# This is the file that used to be hand-applied on kind (argocd/web-application.yaml).
-# Here it needs no human step at all: `terraform apply` produces a cluster that
-# already knows what to deploy.
+# Not a race - deterministic, every time. A CRD and an object of that CRD's
+# kind cannot ship in the same release.
+#
+# It now lives in helm/argocd-bootstrap/, installed as a SECOND helm_release
+# that depends on this one. Same lesson as the ClusterIssuer in the app chart:
+# install the controller with Terraform, apply its custom resources afterwards.
 # ---------------------------------------------------------------------------
-extraObjects:
-  - apiVersion: argoproj.io/v1alpha1
-    kind: Application
-    metadata:
-      name: securedocs
-      namespace: argocd
-    spec:
-      project: default
-
-      source:
-        repoURL: https://github.com/Ziihaooo/securedocs.git
-        targetRevision: argocd
-        path: charts/securedocs
-        helm:
-          valueFiles:
-            # The ONLY difference from the kind Application. Same repo, same
-            # chart, same templates — one line of values.
-            - values-eks.yaml
-
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: default
-
-      syncPolicy:
-        automated:
-          prune: true      # removed from git -> removed from the cluster
-          selfHeal: true   # changed by hand -> reverted
-        syncOptions:
-          # The cluster is rebuilt nightly, so the namespace may not exist yet.
-          - CreateNamespace=true

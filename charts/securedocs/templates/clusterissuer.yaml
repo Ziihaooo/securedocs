@@ -1,0 +1,78 @@
+{{- if .Values.certManager.enabled }}
+# ---------------------------------------------------------------------------
+# Only rendered on clusters that have cert-manager installed.
+#
+# kind has no public IP and no cert-manager, so there certManager.enabled is
+# false and the site stays HTTP. Same chart, both clusters - the same pattern
+# as externalSecrets.
+#
+# Why this lives in the chart and not in Terraform:
+#   ClusterIssuer is a CRD. Terraform's kubernetes_manifest resource has to
+#   read the type definition at PLAN time, which fails on a cluster that does
+#   not exist yet - chicken and egg on every fresh build. ArgoCD applies it
+#   after cert-manager is up, so the ordering resolves itself.
+# ---------------------------------------------------------------------------
+
+# An Issuer holds the ACCOUNT and the METHOD. It issues no certificate by
+# itself - it is the thing a Certificate points at, exactly like a
+# StorageClass is the thing a PVC points at.
+#
+# ClusterIssuer, not Issuer: cluster-scoped, usable from any namespace.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # ACME is the protocol. This is the real Let's Encrypt endpoint - certs
+    # from here are trusted by every browser, and rate limited.
+    server: https://acme-v02.api.letsencrypt.org/directory
+
+    # Optional, and omitted from the manifest entirely when unset. ACME allows
+    # an account with no contact, and Let's Encrypt stopped sending expiry
+    # reminders in 2025 - so an address buys little beyond a line of personal
+    # data in a public repo. cert-manager renews at 2/3 of the lifetime either
+    # way; the email was never what kept the cert alive.
+{{- with .Values.certManager.email }}
+    email: {{ . }}
+{{- end }}
+
+    privateKeySecretRef:
+      # NOT the certificate. This is the ACME ACCOUNT key that identifies you
+      # to Let's Encrypt. cert-manager creates it on first use and reuses it.
+      name: letsencrypt-prod-account-key
+
+    solvers:
+      # How we prove control of the hostname. HTTP-01: Let's Encrypt requests
+      # http://<host>/.well-known/acme-challenge/<token> and must get a
+      # specific answer back. cert-manager spins up a temporary pod plus an
+      # Ingress rule to serve it, then deletes both.
+      #
+      # This is why it can only work once DNS points at the NLB.
+      - http01:
+          ingress:
+            class: {{ .Values.ingress.className }}
+---
+# Identical, except it points at the STAGING endpoint. Staging issues untrusted
+# certs (the browser still warns) but has far looser rate limits.
+#
+# Production Let's Encrypt allows 5 certificates per week for the same set of
+# names. Debug an issuer against prod and you can lock yourself out for days.
+# Test here first, then flip certManager.issuer to letsencrypt-prod.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+{{- with .Values.certManager.email }}
+    email: {{ . }}
+{{- end }}
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: {{ .Values.ingress.className }}
+{{- end }}

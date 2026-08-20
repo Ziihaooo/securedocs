@@ -5,10 +5,26 @@ metadata:
   annotations:
     # Strip /api before forwarding:  /api/healthz/ready  ->  /healthz/ready
     nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # NOTE: no cert-manager annotation here, deliberately. Two Ingresses asking
+    # for the same hostname would mean two Certificate objects, two challenges
+    # and two counts against the rate limit for one cert. web-ingress owns it.
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+{{- if and .Values.certManager.enabled .Values.ingress.host }}
+  tls:
+    # Same host, same Secret. nginx needs to be told this Ingress is also
+    # served over TLS; it reuses the cert web-ingress caused to be created.
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: web-tls
+{{- end }}
   rules:
-    - http:
+{{- if .Values.ingress.host }}
+    - host: {{ .Values.ingress.host }}
+{{- else }}
+    -
+{{- end }}
+      http:
         paths:
           - path: /api(/|$)(.*)
             pathType: ImplementationSpecific
