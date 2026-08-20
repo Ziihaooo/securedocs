@@ -69,7 +69,7 @@ certManager:
   # Start on staging: prove the whole chain works (DNS -> HTTP-01 challenge ->
   # cert in a Secret -> nginx serving it) while a mistake costs nothing.
   # Flip to letsencrypt-prod once the browser warning is the ONLY thing wrong.
-  issuer: letsencrypt-staging
+  issuer: letsencrypt-prod
 
 ingress:
   className: nginx
