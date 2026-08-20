@@ -65,6 +65,17 @@ postgres:
   # The chart only references it by name.
   existingSecret: postgres-credentials
 
+# ── external secrets ────────────────────────────────────────────────────────
+# Off by default. kind has no ESO and no AWS, so the Secret is created by hand
+# there. EKS turns this on and the Secret builds itself from Secrets Manager.
+externalSecrets:
+  enabled: false
+  region: ap-southeast-2
+  namespace: external-secrets
+  serviceAccount: external-secrets
+  # The name of the secret in AWS Secrets Manager (not the Kubernetes Secret).
+  secretName: securedocs/dev/postgres
+
 # ── shared ──────────────────────────────────────────────────────────────────
 ingress:
   className: nginx

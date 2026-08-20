@@ -1,0 +1,117 @@
+# ArgoCD on EKS.
+#
+# Bootstrap infrastructure: it must exist before any application can deploy,
+# so it belongs in Terraform alongside the ALB controller and ingress-nginx.
+
+global:
+  domain: argocd.securedocs.local   # placeholder until Day 12 gives us a real domain
+
+configs:
+  params:
+    # ArgoCD's server terminates TLS itself by default, which means an ingress
+    # in front would be re-encrypting traffic it already decrypted. Running it
+    # insecure lets ingress-nginx own TLS termination — the standard pattern
+    # when ArgoCD sits behind an ingress controller.
+    #
+    # NOT a security downgrade: nothing reaches this Service except through
+    # ingress-nginx, which is where TLS ends.
+    server.insecure: true
+
+server:
+  # ClusterIP for now — reach the UI with `kubectl port-forward`.
+  #
+  # Deliberately NOT exposed publicly yet. An internet-facing ArgoCD with the
+  # default admin password is a genuine way to lose a cluster. Day 12 adds a
+  # real certificate and a domain; if it is ever exposed, SSO comes first.
+  service:
+    type: ClusterIP
+
+  # Two replicas: the API server is stateless, so this is pure availability.
+  replicas: 2
+
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+# The controller that does the actual reconciling — watches git, applies to the
+# cluster. Cannot be scaled horizontally without sharding, so one replica.
+controller:
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+# Clones git repos and renders manifests. This is what runs `helm template` on
+# your chart.
+repoServer:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+# Dex handles SSO (Google, GitHub, Okta). Not used — you log in as the local
+# admin — so it is disabled to save two pods' worth of resources on a
+# two-node cluster.
+dex:
+  enabled: false
+
+# Caches repository and manifest state. Single instance is fine for one app;
+# production uses redis-ha.
+redis:
+  enabled: true
+
+# Sends Slack/email on sync failures. Not configured, so disabled.
+notifications:
+  enabled: false
+
+# Generates Applications from a template — useful with many clusters or many
+# apps. One app, one cluster: not needed.
+applicationSet:
+  enabled: false
+
+# ---------------------------------------------------------------------------
+# The Application, shipped as part of this release.
+#
+# WHY HERE rather than a separate Terraform resource:
+#
+#   kubernetes_manifest validates against the API server at PLAN time, and the
+#   Application CRD does not exist until ArgoCD is installed during APPLY. On a
+#   fresh cluster the plan fails with:
+#       no matches for kind "Application" in group "argoproj.io"
+#   People work around that with two-stage `-target` applies. Rendering it as
+#   part of the same Helm release avoids the problem entirely — the CRD exists
+#   by the time this object is created.
+#
+# This is the file that used to be hand-applied on kind (argocd/web-application.yaml).
+# Here it needs no human step at all: `terraform apply` produces a cluster that
+# already knows what to deploy.
+# ---------------------------------------------------------------------------
+extraObjects:
+  - apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: securedocs
+      namespace: argocd
+    spec:
+      project: default
+
+      source:
+        repoURL: https://github.com/Ziihaooo/securedocs.git
+        targetRevision: argocd
+        path: charts/securedocs
+        helm:
+          valueFiles:
+            # The ONLY difference from the kind Application. Same repo, same
+            # chart, same templates — one line of values.
+            - values-eks.yaml
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: default
+
+      syncPolicy:
+        automated:
+          prune: true      # removed from git -> removed from the cluster
+          selfHeal: true   # changed by hand -> reverted
+        syncOptions:
+          # The cluster is rebuilt nightly, so the namespace may not exist yet.
+          - CreateNamespace=true

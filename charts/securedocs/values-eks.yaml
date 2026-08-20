@@ -46,5 +46,12 @@ postgres:
   # decision — unlike kind, where the volume was a folder on disk.
   storage: 5Gi
 
+# External Secrets Operator is installed on this cluster (infra/l1), so the
+# postgres-credentials Secret builds itself from AWS Secrets Manager.
+# That removes the last manual step: no `kubectl create secret` after a rebuild.
+externalSecrets:
+  enabled: true
+  secretName: securedocs/dev/postgres
+
 ingress:
   className: nginx
