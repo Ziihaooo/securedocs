@@ -90,4 +90,4 @@ ingress:
   # sslip.io resolves any IP embedded in a name straight back to that IP, so
   # there is no DNS record to create anywhere. The cost is this line moving
   # each rebuild — which an Elastic IP would fix for ~$7/month.
-  host: 3.25.10.250.sslip.io
+  host: 13.237.96.131.sslip.io

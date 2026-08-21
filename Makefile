@@ -45,9 +45,17 @@ kubeconfig: ## Point kubectl at the current cluster
 	aws eks update-kubeconfig --name $(CLUSTER) --region $(REGION)
 
 host: ## Resolve the NLB and write the sslip.io hostname into values-eks.yaml
+	@# AWS publishes the DNS record a minute or two AFTER the load balancer
+	@# reports ready, so a single lookup right after `apply` reliably fails.
+	@# Retry for three minutes rather than making the human do it.
 	@nlb=$$(cd $(L1) && terraform output -raw nlb_hostname); \
-	ip=$$(dig +short $$nlb | head -1); \
-	if [ -z "$$ip" ]; then echo "NLB not resolvable yet - wait and retry"; exit 1; fi; \
+	for i in $$(seq 1 18); do \
+	  ip=$$(dig +short $$nlb | head -1); \
+	  [ -n "$$ip" ] && break; \
+	  echo "waiting for $$nlb to resolve ($$i/18)"; \
+	  sleep 10; \
+	done; \
+	if [ -z "$$ip" ]; then echo "NLB still not resolvable after 3 minutes"; exit 1; fi; \
 	sed -i "s|^  host: .*|  host: $$ip.sslip.io|" charts/securedocs/values-eks.yaml; \
 	echo "host: $$ip.sslip.io"; \
 	echo "commit and push - ArgoCD only reads git:"; \
