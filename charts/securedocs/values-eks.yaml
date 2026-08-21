@@ -31,6 +31,12 @@ api:
     # meaning if the tag ever becomes ":latest".
     pullPolicy: IfNotPresent
 
+  # Created in infra/l1/api-irsa.tf. Predictable from the cluster name, so it
+  # survives every rebuild — unlike ingress.host below, this is written once.
+  # Confirm with: terraform output api_role_arn
+  serviceAccount:
+    roleArn: arn:aws:iam::920042984462:role/securedocs-dev-api
+
   # EKS cold start is slower than kind: bigger network hop, cold page cache.
   # 2s x 45 = 90s budget instead of 60.
   startupProbe:

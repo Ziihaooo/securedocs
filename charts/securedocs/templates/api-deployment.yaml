@@ -18,6 +18,11 @@ spec:
       labels:
         app: api
     spec:
+      # Without this the pod runs as the "default" ServiceAccount, whose token
+      # carries no role annotation - and every AWS call returns AccessDenied
+      # with nothing to explain why. One line, easy to forget, hard to debug.
+      serviceAccountName: api
+
       initContainers:
         - name: wait-for-postgres
           # Reuses the postgres image purely for pg_isready — no extra image to

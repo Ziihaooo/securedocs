@@ -31,7 +31,12 @@ resource "helm_release" "ingress_nginx" {
   # Ingress create failed with "x509: certificate signed by unknown authority".
   # Terraform's helm provider waits by default; a longer timeout is safer than
   # a short one, because provisioning an NLB takes a few minutes.
-  timeout = 900
+  # 20 minutes, not 15. This timeout covers the UNINSTALL as well as the
+  # install, and deleting an NLB is slower than creating one. At 900 the
+  # destroy failed with "context deadline exceeded" and left the load balancer
+  # behind as an untracked orphan billing $16/month. `make sweep` now catches
+  # that, but not hitting the timeout is better than cleaning up after it.
+  timeout = 1200
 
   depends_on = [
     helm_release.alb_controller,

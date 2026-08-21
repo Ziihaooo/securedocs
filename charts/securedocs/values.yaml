@@ -42,6 +42,11 @@ api:
   startupProbe:
     periodSeconds: 2
     failureThreshold: 30
+  # The pod's identity. The ServiceAccount is always created; only the IRSA
+  # annotation is conditional, so kind gets a plain ServiceAccount and EKS gets
+  # one that can assume an AWS role.
+  serviceAccount:
+    roleArn: ""
 
 # ── postgres ────────────────────────────────────────────────────────────────
 postgres:
