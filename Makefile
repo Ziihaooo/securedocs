@@ -64,9 +64,15 @@ host: ## Resolve the NLB and write the sslip.io hostname into values-eks.yaml
 # ── teardown ────────────────────────────────────────────────────────────────
 
 down: ## Destroy the cluster, sweep orphans, verify nothing is billing
-	cd $(L1) && terraform destroy -var-file=$(TFVARS)
+	@# The leading "-" means make CONTINUES when destroy fails. That is the
+	@# whole point: a failed destroy is exactly when orphans are left behind,
+	@# so sweep and status must still run. Stopping here once left a $$16/month
+	@# load balancer alive.
+	-cd $(L1) && terraform destroy -var-file=$(TFVARS)
 	@$(MAKE) --no-print-directory sweep
 	@$(MAKE) --no-print-directory status
+	@echo
+	@echo "If anything above is non-empty, re-run: make down"
 
 sweep: ## Delete load balancers and target groups Terraform does not own
 	@# The NLB is created by the AWS Load Balancer Controller, not Terraform,

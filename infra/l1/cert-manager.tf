@@ -50,5 +50,14 @@ resource "helm_release" "cert_manager" {
     helm_release.alb_controller,
 
     aws_route.private_nat,
+
+    # DESTROY ORDERING. Terraform tears these addons down in parallel with the
+    # Helm uninstalls unless told otherwise. Losing CoreDNS mid-teardown leaves
+    # the controllers unable to RESOLVE AWS endpoints at all:
+    #   dial tcp: lookup ec2.ap-southeast-2.amazonaws.com: i/o timeout
+    # The ALB controller then cannot delete the NLB, its finalizer never clears,
+    # and the uninstall hangs until it times out - leaving an orphan behind.
+    aws_eks_addon.coredns,
+    aws_eks_addon.vpc_cni,
   ]
 }
