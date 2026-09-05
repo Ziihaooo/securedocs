@@ -60,6 +60,36 @@ jobs:
           echo "sub  = repo:${{ github.repository }}:ref:${{ github.ref }}"
           echo "role = ${{ env.AWS_ROLE_ARN }}"
 
+      # TEMPORARY. The action wraps every STS failure in the same sentence, so
+      # do the exchange by hand to see what AWS actually says - and decode the
+      # token first, to read the claims AWS will read rather than the ones we
+      # assume it is sending.
+      #
+      # The token itself is never printed: it is a live credential for an hour.
+      - name: Decode the token and call STS directly
+        run: |
+          TOKEN=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            | jq -r '.value')
+
+          echo "token length: ${#TOKEN}"
+
+          # A JWT is three base64url segments. The middle one is the claims.
+          payload=$(echo "$TOKEN" | cut -d. -f2)
+          pad=$(( (4 - ${#payload} % 4) % 4 ))
+          payload="${payload}$(printf '=%.0s' $(seq 1 $pad))"
+          echo "$payload" | tr '_-' '/+' | base64 -d \
+            | jq '{iss, aud, sub, repository, ref, workflow_ref}'
+
+          echo "--- raw STS response ---"
+          aws sts assume-role-with-web-identity \
+            --role-arn "$AWS_ROLE_ARN" \
+            --role-session-name diagnostic \
+            --web-identity-token "$TOKEN" \
+            --region "$AWS_REGION" \
+            --query 'AssumedRoleUser.Arn' || true
+
       # No access key anywhere. GitHub mints a signed token describing this
       # exact repo and branch; AWS checks it against the role's trust policy
       # and returns credentials valid for one hour.

@@ -58,9 +58,15 @@ resource "aws_iam_role" "github_actions" {
       Effect    = "Allow"
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
+      # TEMPORARY - BISECT ONLY. Revert to StringEquals on the full ref before
+      # this repo has any other contributor. A ":*" sub means anyone opening a
+      # pull request from a fork gets these ECR credentials.
+      #
+      # Note StringLike, not StringEquals: a "*" under StringEquals is matched
+      # literally, which is itself a common cause of this exact error.
       Condition = {
-        StringEquals = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
       }
