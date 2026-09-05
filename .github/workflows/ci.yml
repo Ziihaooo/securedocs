@@ -30,6 +30,10 @@ concurrency:
 env:
   AWS_REGION: ap-southeast-2
   ECR_REPOSITORY: securedocs-api
+  # Not a secret: useless to anyone whose OIDC token does not say this exact
+  # repo and branch. Keeping it visible makes the failure debuggable - GitHub
+  # masks secret values in logs, so a wrong ARN in a secret prints as "***".
+  AWS_ROLE_ARN: arn:aws:iam::920042984462:role/securedocs-dev-github-actions
 
 jobs:
   build:
@@ -46,13 +50,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # TEMPORARY. Prints the exact identity GitHub will put in the token, so
+      # it can be compared character by character against the role's trust
+      # policy. AWS deliberately will not say which condition failed - telling
+      # you would let an attacker probe the policy - so you make the caller
+      # reveal what it is sending instead. Remove once this works.
+      - name: Show what the token will claim
+        run: |
+          echo "sub  = repo:${{ github.repository }}:ref:${{ github.ref }}"
+          echo "role = ${{ env.AWS_ROLE_ARN }}"
+
       # No access key anywhere. GitHub mints a signed token describing this
       # exact repo and branch; AWS checks it against the role's trust policy
       # and returns credentials valid for one hour.
       - name: Assume the AWS role
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to ECR
