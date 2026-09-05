@@ -58,15 +58,23 @@ resource "aws_iam_role" "github_actions" {
       Effect    = "Allow"
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
-      # TEMPORARY - BISECT ONLY. Revert to StringEquals on the full ref before
-      # this repo has any other contributor. A ":*" sub means anyone opening a
-      # pull request from a fork gets these ECR credentials.
+      # NOTE the shape of github_repo. This repository's OIDC tokens carry
+      # numeric IDs in the subject:
       #
-      # Note StringLike, not StringEquals: a "*" under StringEquals is matched
-      # literally, which is itself a common cause of this exact error.
+      #   repo:Ziihaooo@137987948/securedocs@1331597756:ref:refs/heads/argocd
+      #           ^^^^^^^^^^                ^^^^^^^^^^^
+      #
+      # not the "repo:owner/name:..." every guide shows. A policy written from
+      # the documented shape fails with a bare "Not authorized", and so does a
+      # "repo:owner/name:*" wildcard - the mismatch occurs before the wildcard
+      # begins. The only way to find it is to decode the token and read the
+      # claim, which is what the diagnostic step in ci.yml does.
+      #
+      # The IDs are actually the better identifier: they survive a rename of
+      # either the account or the repository, whereas names do not.
       Condition = {
-        StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+        StringEquals = {
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
       }

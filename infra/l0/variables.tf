@@ -33,9 +33,13 @@ variable "private_subnet_cidrs" {
 # Which repository and branch may assume the GitHub Actions role. Variables
 # rather than literals so a release branch or a second repo is a tfvars change.
 variable "github_repo" {
-  description = "owner/name of the repository CI runs in"
+  description = "Repository identity exactly as it appears in the OIDC sub claim"
   type        = string
-  default     = "Ziihaooo/securedocs"
+
+  # NOT plain "owner/name". This repository's tokens embed the numeric owner
+  # and repository IDs. Verify with the diagnostic step in ci.yml, which
+  # decodes the token and prints the claim - never assume the documented shape.
+  default = "Ziihaooo@137987948/securedocs@1331597756"
 }
 
 variable "github_branch" {
