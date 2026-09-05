@@ -28,3 +28,18 @@ variable "private_subnet_cidrs" {
   description = "Private subnet CIDRs, one per AZ. Hosts the EKS nodes and pods."
   type        = list(string)
 }
+
+# ── CI ──────────────────────────────────────────────────────────────────────
+# Which repository and branch may assume the GitHub Actions role. Variables
+# rather than literals so a release branch or a second repo is a tfvars change.
+variable "github_repo" {
+  description = "owner/name of the repository CI runs in"
+  type        = string
+  default     = "Ziihaooo/securedocs"
+}
+
+variable "github_branch" {
+  description = "Branch allowed to push images. Must be the branch ArgoCD tracks."
+  type        = string
+  default     = "argocd"
+}

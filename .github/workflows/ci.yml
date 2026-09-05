@@ -1,0 +1,95 @@
+# ---------------------------------------------------------------------------
+# Build, push, and hand over to ArgoCD.
+#
+# This is the piece that was missing: everything until now was CD. CI produces
+# an image and a git commit; it never talks to the cluster, holds no
+# kubeconfig, and needs no Kubernetes permissions at all.
+#
+#   build -> push to ECR -> write the tag into values-eks.yaml -> commit
+#                                                                    |
+#                                          ArgoCD notices and deploys ┘
+#
+# The last step is what makes this GitOps rather than a deploy script.
+# ---------------------------------------------------------------------------
+name: ci
+
+on:
+  push:
+    branches: [argocd]
+    paths:
+      # Only rebuild when something that lands in the image changes. Editing a
+      # runbook or a Terraform file must not produce a new image tag.
+      - "src/**"
+      - ".github/workflows/ci.yml"
+
+# Two jobs must never race to push the same tag or commit to the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPOSITORY: securedocs-api
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # Least privilege, GitHub side. The default is read-only; each line below
+    # is a deliberate grant.
+    permissions:
+      id-token: write   # REQUIRED to mint the OIDC token. Without it the
+                        # AWS step fails with "Credentials could not be loaded"
+                        # and never explains why.
+      contents: write   # to commit the new tag back to the branch
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # No access key anywhere. GitHub mints a signed token describing this
+      # exact repo and branch; AWS checks it against the role's trust policy
+      # and returns credentials valid for one hour.
+      - name: Assume the AWS role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # The commit SHA, not a hand-written version. Immutable, traceable back
+      # to one commit, and impossible to forget to bump. The ECR repository is
+      # set to IMMUTABLE tags, so a tag can never be overwritten.
+      - name: Compute the image tag
+        id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          docker build -t "$REGISTRY/$ECR_REPOSITORY:$TAG" src/api
+          docker push "$REGISTRY/$ECR_REPOSITORY:$TAG"
+
+      # The handover. CI does not deploy - it changes the desired state in git
+      # and stops. ArgoCD reconciles from there.
+      - name: Write the new tag into values-eks.yaml
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          sed -i "s|^    tag: .*|    tag: $TAG|" charts/securedocs/values-eks.yaml
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/securedocs/values-eks.yaml
+
+          # Nothing to do if the tag is unchanged - a re-run of the same commit.
+          git diff --staged --quiet && exit 0
+
+          # [skip ci] stops this commit from triggering this workflow again.
+          # Without it the push loops forever: build -> commit -> build.
+          git commit -m "ci: image ${TAG} [skip ci]"
+          git push
