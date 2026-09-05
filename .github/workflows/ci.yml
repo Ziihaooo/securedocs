@@ -49,46 +49,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      # TEMPORARY. Prints the exact identity GitHub will put in the token, so
-      # it can be compared character by character against the role's trust
-      # policy. AWS deliberately will not say which condition failed - telling
-      # you would let an attacker probe the policy - so you make the caller
-      # reveal what it is sending instead. Remove once this works.
-      - name: Show what the token will claim
-        run: |
-          echo "sub  = repo:${{ github.repository }}:ref:${{ github.ref }}"
-          echo "role = ${{ env.AWS_ROLE_ARN }}"
-
-      # TEMPORARY. The action wraps every STS failure in the same sentence, so
-      # do the exchange by hand to see what AWS actually says - and decode the
-      # token first, to read the claims AWS will read rather than the ones we
-      # assume it is sending.
-      #
-      # The token itself is never printed: it is a live credential for an hour.
-      - name: Decode the token and call STS directly
-        run: |
-          TOKEN=$(curl -sS \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            | jq -r '.value')
-
-          echo "token length: ${#TOKEN}"
-
-          # A JWT is three base64url segments. The middle one is the claims.
-          payload=$(echo "$TOKEN" | cut -d. -f2)
-          pad=$(( (4 - ${#payload} % 4) % 4 ))
-          payload="${payload}$(printf '=%.0s' $(seq 1 $pad))"
-          echo "$payload" | tr '_-' '/+' | base64 -d \
-            | jq '{iss, aud, sub, repository, ref, workflow_ref}'
-
-          echo "--- raw STS response ---"
-          aws sts assume-role-with-web-identity \
-            --role-arn "$AWS_ROLE_ARN" \
-            --role-session-name diagnostic \
-            --web-identity-token "$TOKEN" \
-            --region "$AWS_REGION" \
-            --query 'AssumedRoleUser.Arn' || true
+        with:
+          # Full history. The write-back below rebases onto the remote, which a
+          # shallow clone (the default, fetch-depth 1) cannot do.
+          fetch-depth: 0
 
       # No access key anywhere. GitHub mints a signed token describing this
       # exact repo and branch; AWS checks it against the role's trust policy
@@ -123,6 +87,7 @@ jobs:
       - name: Write the new tag into values-eks.yaml
         env:
           TAG: ${{ steps.tag.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           sed -i "s|^    tag: .*|    tag: $TAG|" charts/securedocs/values-eks.yaml
 
@@ -136,4 +101,19 @@ jobs:
           # [skip ci] stops this commit from triggering this workflow again.
           # Without it the push loops forever: build -> commit -> build.
           git commit -m "ci: image ${TAG} [skip ci]"
-          git push
+
+          # The branch may have moved while this build was running - someone
+          # pushed, or this is a re-run of an older commit. A plain push is then
+          # rejected as a non-fast-forward. Rebase onto whatever is there now
+          # and retry; the only change being carried is one line of YAML, so
+          # there is nothing to conflict with.
+          for attempt in 1 2 3; do
+            git pull --rebase origin "$BRANCH" \
+              && git push origin "HEAD:$BRANCH" \
+              && exit 0
+            echo "push race, retrying ($attempt/3)"
+            sleep 5
+          done
+
+          echo "could not push after 3 attempts"
+          exit 1
