@@ -25,7 +25,7 @@ api:
     # A REAL version, not "dev". The ECR repo is set to IMMUTABLE tags, so a
     # tag can never be overwritten — v0.1.0 always means the same bytes.
     # That is also what cosign signs in Week 3.
-    tag: v0.1.0
+    tag: 63b9f4c
 
     # Default for a non-":latest" tag, stated explicitly so it cannot change
     # meaning if the tag ever becomes ":latest".
