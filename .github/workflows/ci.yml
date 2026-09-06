@@ -74,13 +74,41 @@ jobs:
         id: tag
         run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push
+      - name: Build the image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           docker build -t "$REGISTRY/$ECR_REPOSITORY:$TAG" src/api
-          docker push "$REGISTRY/$ECR_REPOSITORY:$TAG"
+
+      # BETWEEN build and push, deliberately.
+      #
+      # ECR already scans on push - but by then the image is in the registry
+      # and this workflow has gone green. Scanning here means a bad image is
+      # never stored at all.
+      - name: Scan the image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
+
+          # Only the two severities worth a human's attention. LOW and MEDIUM
+          # on a base image number in the dozens and are mostly unreachable
+          # from your code - report them and people stop reading the output.
+          severity: HIGH,CRITICAL
+
+          # Findings with no fix available yet. You cannot act on them, so
+          # failing on them only teaches people to ignore the scanner.
+          ignore-unfixed: true
+
+          # Report, do not block - for now. Same reasoning as Checkov: read the
+          # list first, then decide what blocking should mean.
+          exit-code: "0"
+
+      - name: Push the image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: docker push "$REGISTRY/$ECR_REPOSITORY:$TAG"
 
       # The handover. CI does not deploy - it changes the desired state in git
       # and stops. ArgoCD reconciles from there.

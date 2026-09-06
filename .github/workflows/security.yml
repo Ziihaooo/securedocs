@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------------------
+# Static analysis. Separate from ci.yml on purpose.
+#
+# ci.yml answers "can this ship?" and only runs on pushes to the deploy branch.
+# This answers "is this safe?" and runs on every push and every pull request,
+# including branches that will never be deployed. Different question, different
+# trigger, different failure meaning.
+#
+# Nothing here needs AWS credentials, so this workflow requests none.
+# ---------------------------------------------------------------------------
+name: security
+
+on:
+  push:
+  pull_request:
+
+# A new push to the same branch makes the previous scan irrelevant - unlike a
+# build, which may already have pushed an image. Safe to cancel here.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── secrets ───────────────────────────────────────────────────────────────
+  # The one scanner that BLOCKS unconditionally.
+  #
+  # A leaked credential is not a risk rating to weigh up - it is already public
+  # the moment it is pushed, and rewriting history does not un-publish it.
+  # Anything GitHub has seen must be rotated, so the only useful moment to
+  # catch it is before the push lands.
+  secrets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks scans HISTORY, not just the current files. A secret
+          # deleted in a later commit is still sitting in an earlier one, and
+          # still valid. A shallow clone would miss exactly that case.
+          fetch-depth: 0
+
+      - name: Scan git history for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── terraform ─────────────────────────────────────────────────────────────
+  # Checkov reads your .tf files and checks them against a few hundred rules:
+  # is the bucket public, is the volume encrypted, is the security group open
+  # to the world.
+  #
+  # It never talks to AWS. It reads the FILES, so it runs in seconds and needs
+  # no credentials.
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan Terraform for misconfiguration
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra
+
+          # Report everything, fail on nothing - for now.
+          #
+          # A scanner switched on mid-project always finds a pile of existing
+          # findings. Blocking on day one means the next person to touch this
+          # repo cannot merge anything until they have fixed all of them, so
+          # they turn the scanner off instead. Read the list first, decide what
+          # is real, then tighten.
+          soft_fail: true
